@@ -3,6 +3,104 @@ document.addEventListener("DOMContentLoaded", () => {
   const capabilitySelect = document.getElementById("capability");
   const registerForm = document.getElementById("register-form");
   const messageDiv = document.getElementById("message");
+  const loginForm = document.getElementById("login-form");
+  const authStatus = document.getElementById("auth-status");
+  const logoutButton = document.getElementById("logout-button");
+  const pendingContainer = document.getElementById("pending-container");
+  const pendingList = document.getElementById("pending-list");
+  let currentUser = JSON.parse(localStorage.getItem("capabilitiesUser") || "null");
+  let accessToken = localStorage.getItem("capabilitiesToken");
+
+  function authHeaders() {
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  }
+
+  function updateAuthUI() {
+    const signedIn = Boolean(accessToken && currentUser);
+    loginForm.classList.toggle("hidden", signedIn);
+    logoutButton.classList.toggle("hidden", !signedIn);
+    authStatus.classList.toggle("hidden", !signedIn);
+    authStatus.textContent = signedIn
+      ? `Signed in as ${currentUser.username} (${currentUser.role.replace("_", " ")})`
+      : "";
+    if (signedIn && currentUser.role === "practice_lead") {
+      refreshPendingRequests();
+    } else {
+      pendingContainer.classList.add("hidden");
+    }
+  }
+
+  async function refreshPendingRequests() {
+    const response = await fetch("/registrations/pending", { headers: authHeaders() });
+    if (!response.ok) {
+      pendingContainer.classList.add("hidden");
+      return;
+    }
+    const requests = await response.json();
+    pendingList.innerHTML = requests.length
+      ? requests.map((request, index) => `
+          <li>
+            ${request.email} requested ${request.capability}
+            <button class="approve-btn" data-request-index="${index}" type="button">Approve</button>
+          </li>`).join("")
+      : "<li>No pending requests</li>";
+    pendingContainer.classList.remove("hidden");
+    document.querySelectorAll(".approve-btn").forEach((button) => {
+      button.addEventListener("click", handleApproval);
+    });
+  }
+
+  async function handleApproval(event) {
+    const requestIndex = event.target.getAttribute("data-request-index");
+    const response = await fetch(`/registrations/pending/${requestIndex}/approve`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    const result = await response.json();
+    messageDiv.textContent = result.message || result.detail;
+    messageDiv.className = response.ok ? "success" : "error";
+    messageDiv.classList.remove("hidden");
+    if (response.ok) {
+      refreshPendingRequests();
+      fetchCapabilities();
+    }
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    const response = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      authStatus.textContent = result.detail || "Unable to sign in";
+      authStatus.className = "error";
+      authStatus.classList.remove("hidden");
+      return;
+    }
+    accessToken = result.access_token;
+    currentUser = result.user;
+    localStorage.setItem("capabilitiesToken", accessToken);
+    localStorage.setItem("capabilitiesUser", JSON.stringify(currentUser));
+    loginForm.reset();
+    updateAuthUI();
+    fetchCapabilities();
+  }
+
+  async function handleLogout() {
+    await fetch("/auth/logout", { method: "POST", headers: authHeaders() });
+    accessToken = null;
+    currentUser = null;
+    localStorage.removeItem("capabilitiesToken");
+    localStorage.removeItem("capabilitiesUser");
+    updateAuthUI();
+    fetchCapabilities();
+  }
 
   // Function to fetch capabilities from API
   async function fetchCapabilities() {
@@ -82,6 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: authHeaders(),
         }
       );
 
@@ -126,6 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/register?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: authHeaders(),
         }
       );
 
@@ -158,5 +258,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
+  loginForm.addEventListener("submit", handleLogin);
+  logoutButton.addEventListener("click", handleLogout);
+  updateAuthUI();
   fetchCapabilities();
 });
