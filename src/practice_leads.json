@@ -1,0 +1,16 @@
+[
+  {
+    "username": "practice.lead",
+    "role": "practice_lead",
+    "salt": "8f4d9c2a6e1b7f30c5d8a2e9b4f67103",
+    "iterations": 120000,
+    "password_hash": "84c3d0c221fe8fb63055bd94cec15cea90a51b6bafa638fbcae5207893187b56"
+  },
+  {
+    "username": "alice.smith@slalom.com",
+    "role": "consultant",
+    "salt": "8f4d9c2a6e1b7f30c5d8a2e9b4f67103",
+    "iterations": 120000,
+    "password_hash": "84c3d0c221fe8fb63055bd94cec15cea90a51b6bafa638fbcae5207893187b56"
+  }
+]
